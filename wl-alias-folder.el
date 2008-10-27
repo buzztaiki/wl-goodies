@@ -1,4 +1,3 @@
-
 ;;; wl-alias-folder.el --- Alias Folder Support for Wanderlust.
 
 ;; Copyright (C) 2008  Taiki SUGAWARA <buzz.taiki@gmail.com>
