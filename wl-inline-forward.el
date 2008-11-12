@@ -1,4 +1,4 @@
-;;; wl-inline-forward.el --- Inline Forward Add-On for Warnderlust.
+;;; wl-inline-forward.el --- Inline Forward Support for Warnderlust.
 
 ;; Copyright (C) 2008  Taiki SUGAWARA <sugawara_t@ariel-networks.com>
 
@@ -21,23 +21,81 @@
 ;; Boston, MA 02110-1301, USA.
 
 ;;; Commentary:
+;; This extension provides inline style message forwarding (like a windows
+;; MUA) to Wanderlust.
 
 ;;; (@* "Configuration Examples")
-
-;; Add followings to your `.wl' file.
+;; First, add followings to your `.wl' file.
 ;;
 ;;   (require 'wl-inline-forward)
-
+;;
 ;; If you want to use inline forward always, add followings.
 ;;
 ;;   (define-key wl-summary-mode-map "f" 'wl-inline-forward)
-
+;;
 ;; Otherwise, if you want to select forwarding method every time, add
 ;; followings.
 ;;
 ;;   (define-key wl-summary-mode-map "f" 'wl-inline-forward-select-method)
 
 ;;; Code:
+
+(defvar wl-inline-forward-format-date-function 'identity
+  "*Format date function for `wl-inline-forward'.
+This variable calls following arguments:
+  \(DATE-STRING)
+DATE-STRING comes from Date header of forwarded mail.
+You can use following function and varialbes for format date.
+  `wl-inline-forward-format-date'
+  `wl-inline-forward-date-format'
+")
+
+(defvar wl-inline-forward-date-format "%Y-%m-%d %T %z"
+  "*Date format for `wl-inline-forward-format-date'")
+
+(defvar wl-inline-forward-format-addresses-function
+  'wl-inline-forward-format-addresees
+  "*Format addresses function for `wl-inline-forward'.
+This variable calls following arguments:
+  \(ADDRESSES-STRING FIELD)
+ADDRESSES-STRING is a value of FIELD
+FIELD is a header field of forwarded mail.
+You can use following functions for format addresses.
+  `wl-inline-forward-format-addresses'
+  `wl-inline-forward-format-addresses-as-name'
+  `wl-inline-forward-format-addresses-as-address'
+")
+
+(defun wl-inline-forward-format-date (date-string)
+  "Format DATE-STRING with `wl-inline-forward-date-format'."
+  (format-time-string
+   wl-inline-forward-date-format
+   (elmo-time-parse-date-string date-string)))
+
+(defun wl-inline-forward-extract-addresses (address-string)
+  (mapcar
+   (lambda (x)
+     (list (std11-full-name-string x)
+	   (std11-address-string x)))
+   (std11-parse-addresses-string
+    (std11-unfold-string address-string))))
+
+(defun wl-inline-forward-format-addresses-as-name (addresses-string field)
+  (wl-inline-forward-format-addresees
+   (mapconcat (lambda (x) (or (car x) (cadr x)))
+	      (wl-inline-forward-extract-addresses addresses-string)
+	      ", ")
+   field))
+
+(defun wl-inline-forward-format-addresses-as-address (addresses-string field)
+  (wl-inline-forward-format-addresees
+   (mapconcat 'cadr
+	      (wl-inline-forward-extract-addresses addresses-string)
+	      ", ")
+   field))
+
+(defun wl-inline-forward-format-addresses (addresses-string field)
+  (mime-decode-field-body addresses-string field 'wide))
 
 (defun wl-inline-forward ()
   "forward message as inline."
@@ -46,31 +104,27 @@
 	(message (wl-summary-message-string 'maybe))
 	(folder (wl-summary-buffer-folder-name))
 	(number (wl-summary-message-number))
-	(get-field-func
-	 (lambda (name mode)
-	   (let ((value (std11-field-body name)))
-	     (or (and value (mime-decode-field-body value name mode))
-		 ""))))
-	subject forward-subject to cc from date references
+	field-alist forward-subject references
 	content-type content-transfer-encoding
 	body)
     (with-temp-buffer
       (set-buffer-multibyte t)
       (insert (string-to-multibyte message))
-      (setq subject (funcall get-field-func "Subject" 'plain))
-      (setq forward-subject (wl-draft-forward-make-subject subject))
-      (setq to (funcall get-field-func "To" 'wide))
-      (setq cc (funcall get-field-func "Cc" 'wide))
-      (setq from (funcall get-field-func "From" 'wide))
-      (setq date (std11-field-body "Date"))
-      (setq date (or (and date
-			  (let ((datevec (timezone-parse-date date)))
-			    (format "%s/%s/%s %s"
-				    (aref datevec 0)
-				    (aref datevec 1)
-				    (aref datevec 2)
-				    (aref datevec 3))))
-		     ""))
+      (setq field-alist
+	    (mapcar
+	     (lambda (pair)
+	       (let* ((field (car pair))
+		      (func (cdr pair))
+		      (value (std11-field-body field)))
+		 (cons field (and value (funcall func value field)))))
+	     `(("Subject" . (lambda (value field)
+			      (mime-decode-field-body value field 'plain)))
+	       ("From" . ,wl-inline-forward-format-addresses-function)
+	       ("Date" . (lambda (value field)
+			   (funcall wl-inline-forward-format-date-function value)))
+	       ("To" . ,wl-inline-forward-format-addresses-function)
+	       ("Cc" . ,wl-inline-forward-format-addresses-function))))
+      (setq forward-subject (wl-draft-forward-make-subject (cdr (assoc "Subject" field-alist))))
       (setq references (nconc
 			(std11-field-bodies '("References" "In-Reply-To"))
 			(list (std11-field-body "Message-Id"))))
@@ -108,11 +162,10 @@
       (delete-region (match-beginning 0) (match-end 0)))
     ;; insert citation headers
     (insert "\n---------- Forwarded Message ----------\n")
-    (insert "From: " from "\n")
-    (insert "Subject: " subject "\n")
-    (insert "Date: " date "\n")
-    (insert "To: " to "\n")
-    (insert "To: " cc "\n")
+    (mapc (lambda (pair)
+	    (when (cdr pair)
+	      (insert (car pair) ": " (cdr pair) "\n")))
+	  field-alist)
     ;; finish!
     (mail-position-on-field "To")
     (setq wl-draft-config-variables
@@ -120,7 +173,8 @@
 		  wl-draft-config-variables))
     (wl-draft-config-info-operation wl-draft-buffer-message-number 'save)
     (run-hooks 'wl-draft-forward-hook)
-    (with-current-buffer summary-buf (run-hooks 'wl-summary-forward-hook))
+    (with-current-buffer summary-buf
+      (run-hooks 'wl-summary-forward-hook))
     (run-hooks 'wl-mail-setup-hook)))
 
 (defun wl-inline-forward-select-method ()
