@@ -39,6 +39,10 @@
 ;;   (define-key wl-summary-mode-map "f" 'wl-inline-forward-select-method)
 
 ;;; Code:
+(require 'std11)
+(require 'eword-decode)
+(require 'wl-draft)
+(require 'wl-summary)
 
 (defvar wl-inline-forward-format-date-function 'identity
   "*Format date function for `wl-inline-forward'.
