@@ -1,8 +1,8 @@
 ;;; wl-inline-forward.el --- Inline Forward Support for Warnderlust.
 
-;; Copyright (C) 2008  Taiki SUGAWARA <sugawara_t@ariel-networks.com>
+;; Copyright (C) 2008  Taiki SUGAWARA <buzz.taiki@gmail.com>
 
-;; Author: Taiki SUGAWARA <sugawara_t@ariel-networks.com>
+;; Author: Taiki SUGAWARA <buzz.taiki@gmail.com>
 ;; Keywords: mail
 
 ;; This file is free software; you can redistribute it and/or modify
