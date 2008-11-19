@@ -21,16 +21,21 @@
 ;; Boston, MA 02110-1301, USA.
 
 ;;; Commentary:
-;; This extension provides jit-lock highlighting at draft-buffer. When you use
-;; this extension, you don't need type C-l at writing draft.
+;; This extension provides jit-lock highlighting for draft-buffer. When you
+;; use this extension, you don't need type C-l at writing draft.
 
 ;;; (@* "Configuration")
 ;; Add followings to your `.wl' file.
 ;;
 ;;   (require 'wl-jit-highlight)
 ;;   (add-hook 'wl-draft-mode-hook 'wl-jit-highlight-draft-register)
-;;   (define-key wl-draft-mode-map [remap 'font-lock-fontify-block] 'wl-jit-highlight-draft-buffer)
-;;   (define-key wl-draft-mode-map [remap 'font-lock-fontify-buffer] 'wl-jit-highlight-draft-buffer)
+;;   (define-key wl-draft-mode-map [remap font-lock-fontify-block] 'wl-jit-highlight-draft-buffer)
+;;   (define-key wl-draft-mode-map [remap font-lock-fontify-buffer] 'wl-jit-highlight-draft-buffer)
+;;   (define-key wl-draft-mode-map [remap wl-draft-highlight-and-recenter] 'recenter)
+
+;;; (@* "TODO")
+;; - replace wl-highlight-message to this packages function?
+;; - rename wl-jit-highlight-draft-* to wl-jit-highlight-message-*?
 
 ;;; Code:
 
