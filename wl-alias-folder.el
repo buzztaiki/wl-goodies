@@ -21,9 +21,9 @@
 ;; Boston, MA 02110-1301, USA.
 
 ;;; Commentary:
-;; (@* "Configuration Examples")
+;; (@* "Configuration")
 
-;; If you want to use alias folder for gmail acconut, you run a following
+;; If you want to use alias folder for gmail acconut, you try a following
 ;; steps.
 
 ;; 1. Add followings to your `.wl' file.
@@ -43,6 +43,8 @@
 ;; :gmail:/
 ;;
 ;; 3. Restart Wanderlust
+
+;; If you want to other imap account aliases, you try above steps as well.
 
 ;;; (@* "TODO")
 
