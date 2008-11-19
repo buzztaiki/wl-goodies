@@ -24,7 +24,7 @@
 ;; This extension provides inline style message forwarding (like a windows
 ;; MUA) to Wanderlust.
 
-;;; (@* "Configuration Examples")
+;;; (@* "Configuration")
 ;; First, add followings to your `.wl' file.
 ;;
 ;;   (require 'wl-inline-forward)
