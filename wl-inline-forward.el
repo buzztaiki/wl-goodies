@@ -58,7 +58,7 @@ You can use following function and varialbes for format date.
   "*Date format for `wl-inline-forward-format-date'")
 
 (defvar wl-inline-forward-format-addresses-function
-  'wl-inline-forward-format-addresees
+  'wl-inline-forward-format-addresses
   "*Format addresses function for `wl-inline-forward'.
 This variable calls following arguments:
   \(ADDRESSES-STRING FIELD)
@@ -85,14 +85,14 @@ You can use following functions for format addresses.
     (std11-unfold-string address-string))))
 
 (defun wl-inline-forward-format-addresses-as-name (addresses-string field)
-  (wl-inline-forward-format-addresees
+  (wl-inline-forward-format-addresses
    (mapconcat (lambda (x) (or (car x) (cadr x)))
 	      (wl-inline-forward-extract-addresses addresses-string)
 	      ", ")
    field))
 
 (defun wl-inline-forward-format-addresses-as-address (addresses-string field)
-  (wl-inline-forward-format-addresees
+  (wl-inline-forward-format-addresses
    (mapconcat 'cadr
 	      (wl-inline-forward-extract-addresses addresses-string)
 	      ", ")
