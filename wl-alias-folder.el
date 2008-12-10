@@ -48,6 +48,8 @@
 
 ;;; (@* "TODO")
 ;; - refile is very slow. delegation is not must worked?
+;;   => maybe, `elmo-folder-append-messages' is wrong.
+;;      should setup `elmo-append-messages-dispatch-table' exactry.
 
 ;;; Code:
 
