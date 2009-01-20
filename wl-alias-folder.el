@@ -156,6 +156,15 @@
      (elmo-alias-mailbox-parser (elmo-folder-name-internal target))
      (elmo-folder-have-subfolder-p target))))
 
+(defadvice elmo-folder-append-messages (before elmo-alias activate)
+  "Alias folder support."
+  ;; 0: dst-folder
+  ;; 1: src-folder
+  (when (eq (elmo-folder-type-internal (ad-get-arg 0)) 'alias)
+    (ad-set-arg 0 (elmo-alias-folder-target-internal (ad-get-arg 0))))
+  (when (eq (elmo-folder-type-internal (ad-get-arg 1)) 'alias)
+    (ad-set-arg 1 (elmo-alias-folder-target-internal (ad-get-arg 1)))))
+
 ;; ----------------------------------------------------------------
 ;; (@* "Icon Support")
 ;; ----------------------------------------------------------------
@@ -317,7 +326,8 @@
 ;; (@* "WL Layer")
 ;; ================================================================
 
-(defadvice wl-highlight-folder-current-line (after add-alias-icon activate)
+(defadvice wl-highlight-folder-current-line (after wl-alias-folder activate)
+  "Support alias folder icon."
   (unless (wl-folder-buffer-group-p)
     (let ((overlay (find-if (lambda (x) (overlay-get x 'wl-e21-icon))
 			    (overlays-in (line-beginning-position)
