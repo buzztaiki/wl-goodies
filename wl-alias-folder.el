@@ -47,7 +47,6 @@
 ;; If you want to other imap account aliases, you try above steps as well.
 
 ;;; (@* "TODO")
-;; - refile is very slow. delegation is not must worked?
 
 ;;; Code:
 

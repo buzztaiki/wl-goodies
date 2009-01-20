@@ -38,6 +38,8 @@
 ;; - rename wl-jit-highlight-draft-* to wl-jit-highlight-message-*?
 
 ;;; Code:
+(require 'wl-highlight)
+(require 'mime-edit)
 
 (defface wl-jit-highlight-mime-tag
   '((t :foreground "firebrick" :background "gray95" :box (:line-width 1 :color "dim gray")))
