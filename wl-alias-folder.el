@@ -68,7 +68,7 @@
 	  ,@args)
 	 (,call ',name (elmo-alias-folder-target-internal folder)
 		,@(elmo-delete-if (lambda (x) (memq x '(&optional &rest)))
-				  (copy-list args))))))
+				  (copy-sequence args))))))
 
   (defmacro elmo-alias-define-delegate-methods ()
     (let ((elmo-el (find-library-name "elmo")))
