@@ -47,6 +47,9 @@
 ;; If you want to other imap account aliases, you try above steps as well.
 
 ;;; (@* "TODO")
+;; - Don't use elmo source for defining delegate methods. I think
+;;   mapatoms and ad-arglist is useful for defining methods.
+
 
 ;;; Code:
 
