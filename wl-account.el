@@ -23,18 +23,13 @@
 ;; 
 
 ;;; Todo
-;; - support template
 ;; - support refile
-;; - use following format for config-alist?
-;;   '(("hoge@hoge.com"
-;;       (default . t)
-;;       (folder-format "%" mailbox "@hogehoge")
-;;       (config
-;;        (wl-smtp-posting-server . "smtp.fuga.com"))
-;;       (template
-;;        nil)))
 
 ;;; Code:
+
+(require 'wl-vars)
+(require 'wl-draft)
+(require 'wl-template)
 
 (defvar wl-account-config-alist nil)
 
@@ -44,30 +39,67 @@
    seq))
 
 (defun wl-account-address (account)
-  (nth 0 account))
-(defun wl-account-properties (account)
-  (nth 1 account))
-(defun wl-account-config (account)
-  (nth 2 account))
+  (car account))
+(defun wl-account-value (account name)
+  (cdr (assq name (cdr account))))
 
-(defun wl-account-property (account key)
-  (plist-get (nth 1 account) key))
+(defmacro wl-account-define-accessor (name)
+  `(defun ,(intern (concat "wl-account-" (symbol-name name)))
+     (account)
+     (wl-account-value account ',name)))
+
+(wl-account-define-accessor config)
+(wl-account-define-accessor template)
+(wl-account-define-accessor folder-format)
+(wl-account-define-accessor default)
+(wl-account-define-accessor user-name)
+
+(defalias 'wl-account-default-p 'wl-account-default)
+
+(defun wl-account-folder-regexp-1 (folder-format)
+  (format "^%s$"
+	  (mapconcat
+	   (lambda (x)
+	     (cond ((stringp x)
+		    (regexp-quote x))
+		   ((eq x 'mailbox)
+		    ".+")
+		   (t nil)))
+	   folder-format "")))
+
+(defun wl-account-folder-regexp (account)
+  (wl-account-folder-regexp-1
+   (wl-account-folder-format account)))
 
 (defun wl-account-from (account)
   (format "%s <%s>"
-	  (or (wl-account-property account :name)
+	  (or (wl-account-user-name account)
 	      (user-full-name))
 	  (wl-account-address account)))
 
-(defun wl-account-from-field-value ()
+(defun wl-account-from-field-address ()
   (cadr
    (std11-extract-address-components
     (car (wl-parse-addresses (std11-field-body "From"))))))
 
+(defun wl-account-default-account ()
+  (wl-account-find-if
+   (lambda (account)
+     (wl-account-default-p account))
+   wl-account-config-alist))
+
+(defun wl-account-folder-account (folder)
+  (when folder
+    (wl-account-find-if
+     (lambda (account)
+       (let ((regexp (wl-account-folder-regexp account)))
+	 (and regexp
+	      (string-match regexp folder))))
+     wl-account-config-alist)))
+
 (defun wl-account-config-exec ()
   (let* ((account
-	  (or (assoc (wl-account-from-field-value)
-		     wl-account-config-alist)
+	  (or (assoc (wl-account-from-field-address) wl-account-config-alist)
 	      (wl-account-default-account)))
 	 (exec-flag wl-draft-config-exec-flag)
 	 (wl-draft-config-exec-flag t))
@@ -82,34 +114,34 @@
 		   (wl-account-config account))))))
       (setq wl-draft-config-exec-flag exec-flag))))
 
-(defun wl-account-default-account ()
-  (wl-account-find-if
-   (lambda (account)
-     (wl-account-property account :default))
-   wl-account-config-alist))
-
 (defun wl-account-mail-setup ()
   (let ((account
-	 (or
-	  (wl-account-find-if
-	   (lambda (account)
-	     (let ((regexp (wl-account-property account :folder-regexp)))
-	       (and regexp
-		    (string-match regexp wl-draft-parent-folder))))
-	   wl-account-config-alist)
-	  (wl-account-default-account))))
-    (when account
-      (wl-draft-replace-field
-       "From" (wl-account-from account)))))
+	 (or (wl-account-folder-account wl-draft-parent-folder)
+	     (wl-account-default-account))))
+    (wl-template-insert (wl-account-address account))))
+
+(defun wl-account-template-init ()
+  (dolist (account (reverse
+		    (cons (wl-account-default-account)
+			  wl-account-config-alist)))
+    (set-alist 'wl-template-alist
+	       (wl-account-address account)
+	       (append
+		(list
+		 (cons "From" (wl-account-from account)))
+		(wl-account-template account)))))
 
 (defun wl-account-user-mail-address-list ()
-  (mapcar 'car wl-account-config-alist))
+  (mapcar 'wl-account-address wl-account-config-alist))
 
-(defun wl-account-init ()
+(defun wl-account-init (&optional alist)
+  (when alist
+    (setq wl-account-config-alist alist))
   (add-hook 'wl-draft-send-hook 'wl-account-exec-config)
   (add-hook 'wl-mail-setup-hook 'wl-account-mail-setup)
   (setq wl-user-mail-address-list
-	(wl-account-user-mail-address-list)))
+	(wl-account-user-mail-address-list))
+  (wl-account-template-init))
 
 (provide 'wl-account)
 ;;; wl-account.el ends here
