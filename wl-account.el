@@ -24,6 +24,7 @@
 
 ;;; Todo
 ;; - support template
+;; - support refile
 
 ;;; Code:
 
