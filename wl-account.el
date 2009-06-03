@@ -25,6 +25,14 @@
 ;;; Todo
 ;; - support template
 ;; - support refile
+;; - use following format for config-alist?
+;;   '(("hoge@hoge.com"
+;;       (default . t)
+;;       (folder-format "%" mailbox "@hogehoge")
+;;       (config
+;;        (wl-smtp-posting-server . "smtp.fuga.com"))
+;;       (template
+;;        nil)))
 
 ;;; Code:
 
