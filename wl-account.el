@@ -29,6 +29,11 @@
 
 (defvar wl-account-config-alist nil)
 
+(defsubst wl-account-find-if (predicate seq)
+  (elmo-map-until-success
+   (lambda (x) (and (funcall predicate x) x))
+   seq))
+
 (defun wl-account-address (account)
   (nth 0 account))
 (defun wl-account-properties (account)
@@ -69,7 +74,7 @@
       (setq wl-draft-config-exec-flag exec-flag))))
 
 (defun wl-account-default-account ()
-  (find-if
+  (wl-account-find-if
    (lambda (account)
      (wl-account-property account :default))
    wl-account-config-alist))
@@ -77,7 +82,7 @@
 (defun wl-account-mail-setup ()
   (let ((account
 	 (or
-	  (find-if
+	  (wl-account-find-if
 	   (lambda (account)
 	     (let ((regexp (wl-account-property account :folder-regexp)))
 	       (and regexp
