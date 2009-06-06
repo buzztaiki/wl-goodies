@@ -31,7 +31,26 @@
 (require 'wl-draft)
 (require 'wl-template)
 
-(defvar wl-account-config-alist nil)
+(defvar wl-account-config-alist nil
+  "\((ADDRESS . ACCOUNT-CONFIG) ...))
+
+ACCOUNT-CONFIG:
+\((default . DEFAULT-VALUE)
+  (config . CONFIG-SPEC)
+  (template . CONFIG-SPEC)
+  (folder-format . FOLDER-FORMAT-SPEC))
+
+DEFAULT-VALUE:
+t or nil
+
+CONFIG-SPEC:
+same as value part of `wl-draft-config-alist', `wl-template-alist'.
+
+FOLDER-FORMAT-SPEC:
+list of string or `mailbox' symbol.
+if `mailbox' is appeared, this symbol is replace to mailbox string such as \"INBOX\".
+"
+)
 
 (defsubst wl-account-find-if (predicate seq)
   (elmo-map-until-success
