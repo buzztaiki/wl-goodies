@@ -156,7 +156,7 @@ if `mailbox' is appeared, this symbol is replace to mailbox string such as \"INB
 (defun wl-account-init (&optional alist)
   (when alist
     (setq wl-account-config-alist alist))
-  (add-hook 'wl-draft-send-hook 'wl-account-exec-config)
+  (add-hook 'wl-draft-send-hook 'wl-account-config-exec)
   (add-hook 'wl-mail-setup-hook 'wl-account-mail-setup)
   (setq wl-user-mail-address-list
 	(wl-account-user-mail-address-list))
