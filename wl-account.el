@@ -72,6 +72,14 @@ same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DES
    (lambda (x) (and (funcall predicate x) x))
    seq))
 
+(defun wl-account-normalize-address (address)
+  (cadr
+   (std11-extract-address-components
+    (car (wl-parse-addresses address)))))
+
+(defun wl-account-find-field (field)
+  (std11-field-body field))
+
 ;;; accessors
 (defun wl-account-address (account)
   (car account))
@@ -103,7 +111,7 @@ same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DES
 	(regexp-quote x)))
     (wl-account-folder-format account) "")))
 
-(defun wl-account-compose-folder (account mailbox)
+(defun wl-account-mailbox-folder (account mailbox)
   (mapconcat
    (lambda (x)
      (if (eq x 'mailbox)
@@ -119,9 +127,7 @@ same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DES
 
 ;;; account finders
 (defun wl-account-default-account ()
-  (wl-account-find-if
-   'wl-account-default-p
-   wl-account-config-alist))
+  (wl-account-find-if 'wl-account-default-p wl-account-config-alist))
 
 (defun wl-account-folder-account (folder)
   (when folder
@@ -135,8 +141,15 @@ same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DES
 (defun wl-account-address-account (address)
   (assoc address wl-account-config-alist))
 
+(defun wl-account-draft-account (&optional ignore-from-field)
+  (or (and (not ignore-from-field)
+	   (wl-account-address-account (wl-account-normalize-address
+					(wl-account-find-field "From"))))
+      (wl-account-folder-account wl-draft-parent-folder)
+      (wl-account-default-account)))
+
 ;;; refile
-(defun wl-account-compose-refile-rule-entry (account rule-entry)
+(defun wl-account-refile-compose-rule-entry (account rule-entry)
   (cons
    (car rule-entry)
    (cond
@@ -144,12 +157,12 @@ same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DES
      (let ((folder (cdr rule-entry)))
        (if (elmo-folder-type folder)
 	   folder
-	 (wl-account-compose-folder account folder))))
+	 (wl-account-mailbox-folder account folder))))
     ((consp (cdr rule-entry))
-     (car (wl-account-compose-refile-rule account (list (cdr rule-entry)))))
+     (car (wl-account-refile-compose-rule account (list (cdr rule-entry)))))
     (t (cdr rule-entry)))))
 
-(defun wl-account-compose-refile-rule (account refile-rule)
+(defun wl-account-refile-compose-rule (account refile-rule)
   (let ((symbol-name (lambda (x) (if (symbolp x) (symbol-name x) x))))
     (mapcar
      (lambda (field-and-entries)
@@ -161,54 +174,40 @@ same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DES
 	    (funcall symbol-name field))
 	  (mapcar
 	   (lambda (entry)
-	     (wl-account-compose-refile-rule-entry account entry))
+	     (wl-account-refile-compose-rule-entry account entry))
 	   entries))))
      refile-rule)))
 
 (defun wl-account-refile-guess-by-rule (entity)
   (let* ((account (wl-account-folder-account wl-summary-buffer-folder-name))
 	 (wl-refile-rule-alist
-	  (wl-account-compose-refile-rule
+	  (wl-account-refile-compose-rule
 	   account
 	   (wl-account-refile-rule account))))
     (wl-refile-guess-by-rule entity)))
 
 ;;; draft config
-(defun wl-account-from-field-address ()
-  (cadr
-   (std11-extract-address-components
-    (car (wl-parse-addresses (std11-field-body "From"))))))
-
 (defun wl-account-config-exec-1 (account)
   (wl-draft-config-exec
-   (list
-    (cons
-     t
-     (append
-      (list (cons 'wl-from (wl-account-from account))
-	    (cons 'wl-envelope-from (wl-account-address account)))
-      (let ((fcc (wl-account-fcc account)))
-	(when fcc
-	  (list (cons "Fcc" (wl-account-compose-folder account fcc)))))
-      (wl-account-config account))))))
+   `((t
+      (wl-from . ,(wl-account-from account))
+      (wl-envelope-from . ,(wl-account-address account))
+      ,@(let ((fcc (wl-account-fcc account)))
+	  (and fcc
+	       `(("Fcc" . ,(wl-account-mailbox-folder account fcc)))))
+      ,@(wl-account-config account)))))
 
 (defun wl-account-config-exec ()
-  (let* ((account
-	  (or (wl-account-address-account (wl-account-from-field-address))
-	      (wl-account-default-account)))
-	 (exec-flag wl-draft-config-exec-flag)
-	 (wl-draft-config-exec-flag t))
+  (let ((exec-flag wl-draft-config-exec-flag)
+	(wl-draft-config-exec-flag t))
     (unwind-protect
-	(when account
-	  (wl-account-config-exec-1 account))
+	(wl-account-config-exec-1 (wl-account-draft-account))
       (setq wl-draft-config-exec-flag exec-flag))))
 
 ;;; initializers
 (defun wl-account-mail-setup ()
-  (let ((account
-	 (or (wl-account-folder-account wl-draft-parent-folder)
-	     (wl-account-default-account))))
-    (wl-template-insert (wl-account-address account))))
+  (wl-template-insert (wl-account-address
+		       (wl-account-draft-account 'ignore-from-field))))
 
 (defun wl-account-template-init ()
   (dolist (account (reverse
@@ -216,10 +215,8 @@ same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DES
 			  wl-account-config-alist)))
     (set-alist 'wl-template-alist
 	       (wl-account-address account)
-	       (append
-		(list
-		 (cons "From" (wl-account-from account)))
-		(wl-account-template account)))))
+	       `(("From" . ,(wl-account-from account))
+		 ,@(wl-account-template account)))))
 
 (defun wl-account-user-mail-address-list ()
   (mapcar 'wl-account-address wl-account-config-alist))
