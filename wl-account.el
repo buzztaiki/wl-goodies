@@ -23,6 +23,8 @@
 ;; 
 
 ;;; Todo
+;; - smtp
+;; - draft
 
 ;;; Code:
 
@@ -39,7 +41,8 @@ ACCOUNT-CONFIG:
   (config . CONFIG-SPEC)
   (template . CONFIG-SPEC)
   (folder-format . FOLDER-FORMAT-SPEC)
-  (refile-rule . REFILE-RULE-SPEC))
+  (refile-rule . REFILE-RULE-SPEC)
+  (fcc . FCC-MAILBOX))
 
 DEFAULT-VALUE:
 if non-nil, this account means default.
@@ -85,6 +88,7 @@ same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DES
 (wl-account-define-accessor template)
 (wl-account-define-accessor folder-format)
 (wl-account-define-accessor refile-rule)
+(wl-account-define-accessor fcc)
 
 (defalias 'wl-account-default-p 'wl-account-default)
 
@@ -174,6 +178,19 @@ same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DES
    (std11-extract-address-components
     (car (wl-parse-addresses (std11-field-body "From"))))))
 
+(defun wl-account-config-exec-1 (account)
+  (wl-draft-config-exec
+   (list
+    (cons
+     t
+     (append
+      (list (cons 'wl-from (wl-account-from account))
+	    (cons 'wl-envelope-from (wl-account-address account)))
+      (let ((fcc (wl-account-fcc account)))
+	(when fcc
+	  (list (cons "Fcc" (wl-account-compose-folder account fcc)))))
+      (wl-account-config account))))))
+
 (defun wl-account-config-exec ()
   (let* ((account
 	  (or (wl-account-address-account (wl-account-from-field-address))
@@ -182,13 +199,7 @@ same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DES
 	 (wl-draft-config-exec-flag t))
     (unwind-protect
 	(when account
-	  (wl-draft-config-exec
-	   (list
-	    (cons t
-		  (append
-		   (list (cons 'wl-from (wl-account-from account))
-			 (cons 'wl-envelope-from (wl-account-address account)))
-		   (wl-account-config account))))))
+	  (wl-account-config-exec-1 account))
       (setq wl-draft-config-exec-flag exec-flag))))
 
 ;;; initializers
