@@ -1,4 +1,4 @@
-;;; wl-account.el --- 
+;;; wl-account.el --- Multi Account Configuration Support for Wanderlust.
 
 ;; Copyright (C) 2009  Taiki SUGAWARA <buzz.taiki@gmail.com>
 
@@ -31,6 +31,7 @@
 (require 'wl-vars)
 (require 'wl-draft)
 (require 'wl-template)
+(require 'wl-refile)
 
 (defvar wl-account-config-alist nil
   "\((ADDRESS . ACCOUNT-CONFIG) ...))
