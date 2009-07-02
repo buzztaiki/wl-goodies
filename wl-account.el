@@ -52,11 +52,13 @@ if `mailbox' is appeared, this symbol is replace to mailbox string such as \"INB
 "
 )
 
+;;; utilities
 (defsubst wl-account-find-if (predicate seq)
   (elmo-map-until-success
    (lambda (x) (and (funcall predicate x) x))
    seq))
 
+;;; accessors
 (defun wl-account-address (account)
   (car account))
 (defun wl-account-value (account name)
@@ -96,15 +98,10 @@ if `mailbox' is appeared, this symbol is replace to mailbox string such as \"INB
 	      (user-full-name))
 	  (wl-account-address account)))
 
-(defun wl-account-from-field-address ()
-  (cadr
-   (std11-extract-address-components
-    (car (wl-parse-addresses (std11-field-body "From"))))))
-
+;;; account finders
 (defun wl-account-default-account ()
   (wl-account-find-if
-   (lambda (account)
-     (wl-account-default-p account))
+   'wl-account-default-p
    wl-account-config-alist))
 
 (defun wl-account-folder-account (folder)
@@ -116,9 +113,18 @@ if `mailbox' is appeared, this symbol is replace to mailbox string such as \"INB
 	      (string-match regexp folder))))
      wl-account-config-alist)))
 
+(defun wl-account-address-account (address)
+  (assoc address wl-account-config-alist))
+
+;;; draft config
+(defun wl-account-from-field-address ()
+  (cadr
+   (std11-extract-address-components
+    (car (wl-parse-addresses (std11-field-body "From"))))))
+
 (defun wl-account-config-exec ()
   (let* ((account
-	  (or (assoc (wl-account-from-field-address) wl-account-config-alist)
+	  (or (wl-account-address-account (wl-account-from-field-address))
 	      (wl-account-default-account)))
 	 (exec-flag wl-draft-config-exec-flag)
 	 (wl-draft-config-exec-flag t))
@@ -133,6 +139,7 @@ if `mailbox' is appeared, this symbol is replace to mailbox string such as \"INB
 		   (wl-account-config account))))))
       (setq wl-draft-config-exec-flag exec-flag))))
 
+;;; initializers
 (defun wl-account-mail-setup ()
   (let ((account
 	 (or (wl-account-folder-account wl-draft-parent-folder)
