@@ -23,7 +23,6 @@
 ;; 
 
 ;;; Todo
-;; - support refile
 
 ;;; Code:
 
@@ -36,19 +35,30 @@
 
 ACCOUNT-CONFIG:
 \((default . DEFAULT-VALUE)
+  (user-name . USER-NAME)
   (config . CONFIG-SPEC)
   (template . CONFIG-SPEC)
-  (folder-format . FOLDER-FORMAT-SPEC))
+  (folder-format . FOLDER-FORMAT-SPEC)
+  (refile-rule . REFILE-RULE-SPEC))
 
 DEFAULT-VALUE:
-t or nil
+if non-nil, this account means default.
+
+USER-NAME:
+user name of this account. if nil, use `user-mail-address'.
 
 CONFIG-SPEC:
+config-alist of this account.
 same as value part of `wl-draft-config-alist', `wl-template-alist'.
 
 FOLDER-FORMAT-SPEC:
+folder format of this account.
 list of string or `mailbox' symbol.
 if `mailbox' is appeared, this symbol is replace to mailbox string such as \"INBOX\".
+
+REFILE-RULE-SPEC:
+refile rule of this account.
+same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DEST-FOLDER.
 "
 )
 
@@ -69,28 +79,32 @@ if `mailbox' is appeared, this symbol is replace to mailbox string such as \"INB
      (account)
      (wl-account-value account ',name)))
 
+(wl-account-define-accessor default)
+(wl-account-define-accessor user-name)
 (wl-account-define-accessor config)
 (wl-account-define-accessor template)
 (wl-account-define-accessor folder-format)
-(wl-account-define-accessor default)
-(wl-account-define-accessor user-name)
+(wl-account-define-accessor refile-rule)
 
 (defalias 'wl-account-default-p 'wl-account-default)
 
-(defun wl-account-folder-regexp-1 (folder-format)
-  (format "^%s$"
-	  (mapconcat
-	   (lambda (x)
-	     (cond ((stringp x)
-		    (regexp-quote x))
-		   ((eq x 'mailbox)
-		    ".+")
-		   (t nil)))
-	   folder-format "")))
-
 (defun wl-account-folder-regexp (account)
-  (wl-account-folder-regexp-1
-   (wl-account-folder-format account)))
+  (format
+   "^%s$"
+   (mapconcat
+    (lambda (x)
+      (if (eq x 'mailbox)
+	  ".+"
+	(regexp-quote x)))
+    (wl-account-folder-format account) "")))
+
+(defun wl-account-compose-folder (account mailbox)
+  (mapconcat
+   (lambda (x)
+     (if (eq x 'mailbox)
+	 mailbox
+       x))
+   (wl-account-folder-format account) ""))
 
 (defun wl-account-from (account)
   (format "%s <%s>"
@@ -115,6 +129,44 @@ if `mailbox' is appeared, this symbol is replace to mailbox string such as \"INB
 
 (defun wl-account-address-account (address)
   (assoc address wl-account-config-alist))
+
+;;; refile
+(defun wl-account-compose-refile-rule-entry (account rule-entry)
+  (cons
+   (car rule-entry)
+   (cond
+    ((stringp (cdr rule-entry))
+     (let ((folder (cdr rule-entry)))
+       (if (elmo-folder-type folder)
+	   folder
+	 (wl-account-compose-folder account folder))))
+    ((consp (cdr rule-entry))
+     (car (wl-account-compose-refile-rule account (list (cdr rule-entry)))))
+    (t (cdr rule-entry)))))
+
+(defun wl-account-compose-refile-rule (account refile-rule)
+  (let ((symbol-name (lambda (x) (if (symbolp x) (symbol-name x) x))))
+    (mapcar
+     (lambda (field-and-entries)
+       (let ((field (car field-and-entries))
+	     (entries (cdr field-and-entries)))
+	 (cons
+	  (if (listp field)
+	     (mapcar symbol-name field)
+	    (funcall symbol-name field))
+	  (mapcar
+	   (lambda (entry)
+	     (wl-account-compose-refile-rule-entry account entry))
+	   entries))))
+     refile-rule)))
+
+(defun wl-account-refile-guess-by-rule (entity)
+  (let* ((account (wl-account-folder-account wl-summary-buffer-folder-name))
+	 (wl-refile-rule-alist
+	  (wl-account-compose-refile-rule
+	   account
+	   (wl-account-refile-rule account))))
+    (wl-refile-guess-by-rule entity)))
 
 ;;; draft config
 (defun wl-account-from-field-address ()
@@ -167,7 +219,11 @@ if `mailbox' is appeared, this symbol is replace to mailbox string such as \"INB
   (add-hook 'wl-mail-setup-hook 'wl-account-mail-setup)
   (setq wl-user-mail-address-list
 	(wl-account-user-mail-address-list))
-  (wl-account-template-init))
+  (wl-account-template-init)
+  (add-to-list 'wl-auto-refile-guess-functions
+	       'wl-account-refile-guess-by-rule)
+  (add-to-list 'wl-refile-guess-functions
+	       'wl-account-refile-guess-by-rule))
 
 (provide 'wl-account)
 ;;; wl-account.el ends here
