@@ -23,10 +23,12 @@
 ;; 
 
 ;;; Code:
+(eval-when-compile
+  (require 'cl))
 (require 'anything)
 (require 'wl-folder)
 (require 'wl-summary)
-
+(require 'wl-account)
 
 (defvar anything-wl-ignore-folder-regexp-list nil)
 
@@ -35,16 +37,40 @@
     (candidates . anything-wl-folder-candidates)
     (action ("GoTo Folder" . anything-wl-goto-folder))))
 
-(defun anything-wl-folder-candidates ()
+(defvar anything-c-wl-account-folder-source
+  '((name . "Account Folders")
+    (candidates . anything-wl-account-folder-candidates)
+    (action ("GoTo Folder" . anything-wl-goto-folder))))
+
+(defvar anything-wl-select-folder-sources
+  '(anything-c-wl-account-folder-source
+    anything-c-wl-folder-source))
+
+(defun anything-wl-folder-candidates-1 (filter)
   (let (folders)
     (mapatoms
      (lambda (x)
        (let ((name (symbol-name x)))
-	 (unless (wl-string-match-member
-		  name anything-wl-ignore-folder-regexp-list)
+	 (when (and (not (wl-string-match-member
+			  name anything-wl-ignore-folder-regexp-list))
+		    (funcall filter name))
 	   (push name folders))))
      wl-folder-entity-hashtb)
     (sort folders 'string<)))
+
+(defun anything-wl-folder-candidates ()
+  (anything-wl-folder-candidates-1 'identity))
+
+(defun anything-wl-account-folder-candidates ()
+  (lexical-let
+      ((account
+	(or (with-current-buffer anything-current-buffer
+	      (and (eq major-mode 'wl-summary-mode)
+		   (wl-account-folder-account wl-summary-buffer-folder-name)))
+	    (wl-account-default-account))))
+    (anything-wl-folder-candidates-1
+     (lambda (name)
+       (string-match (wl-account-folder-regexp account) name)))))
 
 (defun anything-wl-goto-folder (folder)
   (cond
@@ -59,8 +85,7 @@
     
 (defun anything-wl-select-folder ()
   (interactive)
-  (anything '(anything-c-wl-folder-source)))
-
+  (anything anything-wl-select-folder-sources))
 
 (provide 'anything-wl)
 ;;; anything-wl.el ends here
