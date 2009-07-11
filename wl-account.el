@@ -24,7 +24,8 @@
 
 ;;; Todo
 ;; - smtp
-;; - draft
+;; - draft folder
+;; - trash folder
 
 ;;; Code:
 
@@ -32,6 +33,7 @@
 (require 'wl-draft)
 (require 'wl-template)
 (require 'wl-refile)
+(require 'elmo-filter)
 
 (defvar wl-account-config-alist nil
   "\((ADDRESS . ACCOUNT-CONFIG) ...))
@@ -138,6 +140,14 @@ same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DES
 	      (string-match regexp folder))))
      wl-account-config-alist)))
 
+(defun wl-account-elmo-folder-account (elmo-folder)
+  (when elmo-folder
+    (if (elmo-folder-type-p elmo-folder 'filter)
+	(wl-account-elmo-folder-account
+	 (elmo-filter-folder-target-internal elmo-folder))
+      (wl-account-folder-account
+       (elmo-folder-name-internal elmo-folder)))))
+
 (defun wl-account-address-account (address)
   (assoc address wl-account-config-alist))
 
@@ -145,7 +155,9 @@ same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DES
   (or (and (not ignore-from-field)
 	   (wl-account-address-account (wl-account-normalize-address
 					(wl-account-find-field "From"))))
-      (wl-account-folder-account wl-draft-parent-folder)
+      (wl-account-elmo-folder-account 
+       (with-current-buffer wl-draft-buffer-cur-summary-buffer
+	 wl-summary-buffer-elmo-folder))
       (wl-account-default-account)))
 
 ;;; refile
@@ -179,7 +191,8 @@ same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DES
      refile-rule)))
 
 (defun wl-account-refile-guess-by-rule (entity)
-  (let* ((account (wl-account-folder-account wl-summary-buffer-folder-name))
+  (let* ((account (wl-account-elmo-folder-account
+		   wl-summary-buffer-elmo-folder))
 	 (wl-refile-rule-alist
 	  (wl-account-refile-compose-rule
 	   account

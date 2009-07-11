@@ -66,7 +66,8 @@
       ((account
 	(or (with-current-buffer anything-current-buffer
 	      (and (eq major-mode 'wl-summary-mode)
-		   (wl-account-folder-account wl-summary-buffer-folder-name)))
+		   (wl-account-elmo-folder-account
+		    wl-summary-buffer-elmo-folder)))
 	    (wl-account-default-account))))
     (anything-wl-folder-candidates-1
      (lambda (name)
