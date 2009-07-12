@@ -47,8 +47,6 @@
 ;; If you want to other imap account aliases, you try above steps as well.
 
 ;;; (@* "TODO")
-;; - Don't use elmo source for defining delegate methods. I think
-;;   mapatoms and ad-arglist is useful for defining methods.
 
 
 ;;; Code:
@@ -62,40 +60,47 @@
 
 (defvar elmo-alias-folder-alist nil)
 
-(eval-when-compile
-  (require 'find-func)
-  (defmacro elmo-alias-define-delegate-method (name args)
-    (let ((call (if (memq '&rest args) 'apply 'funcall)))
-      `(luna-define-method ,name
-	 ((folder elmo-alias-folder)
-	  ,@args)
-	 (,call ',name (elmo-alias-folder-target-internal folder)
-		,@(elmo-delete-if (lambda (x) (memq x '(&optional &rest)))
-				  (copy-sequence args))))))
+(eval-and-compile
+  (defun elmo-alias-list-package-methods (lib)
+    (let (list)
+      (mapatoms
+       (lambda (x)
+	 (when (and
+		(get x 'luna-method-cache)
+		(let ((file (symbol-file x)))
+		  (and file
+		       (string= (file-name-sans-extension
+				 (file-name-nondirectory file))
+				lib))))
+	   (push x list))))
+      list)))
 
-  (defmacro elmo-alias-define-delegate-methods ()
-    (let ((elmo-el (find-library-name "elmo")))
-      (save-excursion
-	(set-buffer (find-file-noselect elmo-el t))
-	(goto-char (point-min))
-	(let (all-forms)
-	  (condition-case e
-	      (while (not (eobp))
-		(let ((form (read (current-buffer ))))
-		  (when (eq (car form) 'luna-define-generic)
-		    (let ((name (nth 1 form))
-			  (args (cdr (nth 2 form))))
-		      (push `(elmo-alias-define-delegate-method ,name ,args)
-			    all-forms)))))
-	    (end-of-file))
-	  (cons 'progn all-forms))))))
+(eval-when-compile
+  (require 'advice)
+  (defmacro elmo-alias-define-delegate-method (name class target-slot)
+    (let* ((args (ad-arglist (symbol-function name)))
+	   (call (if (memq '&rest args) 'apply 'funcall))
+	   (entity-var (gensym "entity-")))
+      `(luna-define-method ,name
+	 ((,entity-var ,class)
+	  ,@(cdr args))
+	 (,call ',name (luna-slot-value ,entity-var ',target-slot)
+		,@(elmo-delete-if (lambda (x) (memq x '(&optional &rest)))
+				  (copy-sequence (cdr args)))))))
+
+  (defmacro elmo-alias-define-delegate-methods (lib class target-slot)
+    (cons
+     'progn
+     (mapcar (lambda (name)
+	       `(elmo-alias-define-delegate-method ,name ,class ,target-slot))
+	     (elmo-alias-list-package-methods lib)))))
 
 (eval-and-compile
   (luna-define-class elmo-alias-folder (elmo-folder)
 		     (alias-name target converter))
   (luna-define-internal-accessors 'elmo-alias-folder))
 
-(elmo-alias-define-delegate-methods)
+(elmo-alias-define-delegate-methods "elmo" elmo-alias-folder target)
 
 (luna-define-method elmo-folder-initialize
   ((folder elmo-alias-folder)
@@ -154,9 +159,7 @@
 (luna-define-method elmo-folder-have-subfolder-p
   ((folder elmo-alias-folder))
   (let ((target (elmo-alias-folder-target-internal folder)))
-    (and
-     (elmo-alias-mailbox-parser (elmo-folder-name-internal target))
-     (elmo-folder-have-subfolder-p target))))
+    (elmo-folder-have-subfolder-p target)))
 
 (defadvice elmo-folder-append-messages (before elmo-alias activate)
   "Alias folder support."
