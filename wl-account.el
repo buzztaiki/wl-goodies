@@ -23,7 +23,7 @@
 ;; 
 
 ;;; Todo
-;; - smtp
+;; - smtp configuration.
 ;; - draft folder
 ;; - trash folder
 
@@ -64,7 +64,10 @@ if `mailbox' is appeared, this symbol is replace to mailbox string such as \"INB
 
 REFILE-RULE-SPEC:
 refile rule of this account.
-same as `wl-refile-rule-alist'. but all you do is to write `mailbox' name of DEST-FOLDER.
+same as `wl-refile-rule-alist'. but it has special feature as followings:
+  - you can use `mailbox' name in DEST-FOLDER instead of full
+    qualifiered folder name.
+  - you can use symbol for filed name.
 "
 )
 
