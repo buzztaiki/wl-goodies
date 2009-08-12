@@ -186,7 +186,7 @@ You can use following functions for format addresses.
   (interactive)
   (let ((c (read-char "Select Forward Method: R)fc822 I)nline")))
     (cond ((eq c ?r) (wl-summary-forward))
-	  ((eq c ?w) (wl-inline-forward))
+	  ((eq c ?i) (wl-inline-forward))
 	  (t (message "Cancel")))))
 
 (provide 'wl-inline-forward)
