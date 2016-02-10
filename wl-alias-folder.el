@@ -250,18 +250,20 @@
 	    (and port (list ":" port))
 	    (and stream-type-spec (list stream-type-spec))))))
 
-;; (@* "Localdir Converter")
-(require 'elmo-localdir)
+;; (@* "Filepath Converter")
 (eval-and-compile
   ;; CONFIG allows followings:
   ;;    - :path
-  (luna-define-class elmo-alias-localdir-converter () (config))
-  (luna-define-internal-accessors 'elmo-alias-localdir-converter))
+  (luna-define-class elmo-alias-filepath-converter () (config type))
+  (luna-define-internal-accessors 'elmo-alias-filepath-converter))
+
+(luna-define-generic elmo-alias-filepath-converter-prefix (converter)
+  "get folder prefix string.")
 
 (luna-define-method elmo-alias-convert-from-target
-  ((converter elmo-alias-localdir-converter)
+  ((converter elmo-alias-filepath-converter)
    name)
-  (let* ((config (elmo-alias-localdir-converter-config-internal converter))
+  (let* ((config (elmo-alias-filepath-converter-config-internal converter))
 	 (target-path (substring name 1))
 	 (path (plist-get config :path)))
     (if path
@@ -273,59 +275,36 @@
       target-path)))
 
 (luna-define-method elmo-alias-convert-to-target
-  ((converter elmo-alias-localdir-converter)
+  ((converter elmo-alias-filepath-converter)
    mailbox)
-  (let* ((config (elmo-alias-localdir-converter-config-internal converter))
-	 (prefix (elmo-alias-folder-prefix 'localdir))
+  (let* ((config (elmo-alias-filepath-converter-config-internal converter))
+	 (prefix (elmo-alias-filepath-converter-prefix converter))
 	 (path (plist-get config :path)))
     (concat
      prefix
      (and path (expand-file-name (or mailbox "") path)))))
 
-;; (@* "NNTP Converter")
-(require 'elmo-nntp)
+
+;; (@* "Localdir Converter")
+(require 'elmo-localdir)
 (eval-and-compile
   ;; CONFIG allows followings:
-  ;;    - :user
-  ;;    - :server
-  ;;    - :port
-  ;;    - :stream-type
-  (luna-define-class elmo-alias-nntp-converter () (config))
-  (luna-define-internal-accessors 'elmo-alias-nntp-converter))
+  ;;    - :path
+  (luna-define-class elmo-alias-localdir-converter (elmo-alias-filepath-converter) (config)))
 
-(luna-define-method elmo-alias-convert-from-target
-  ((converter elmo-alias-nntp-converter)
-   name)
-  (let ((tokens (car (elmo-parse-separated-tokens
-		      name elmo-nntp-folder-name-syntax))))
-    (substring (cdr (assq 'group tokens)) 1)))
+(luna-define-method elmo-alias-filepath-converter-prefix ((converter elmo-alias-localdir-converter))
+  (elmo-alias-folder-prefix 'localdir))
 
-(luna-define-method elmo-alias-convert-to-target
-  ((converter elmo-alias-nntp-converter)
-   mailbox)
-  (let* ((config (elmo-alias-nntp-converter-config-internal converter))
-	 (prefix (elmo-alias-folder-prefix 'nntp))
-	 (user (plist-get config :user))
-	 (server (plist-get config :server))
-	 (port (plist-get config :port))
-	 (stream-type (plist-get config :stream-type))
-	 stream-type-spec)
-    (when (numberp port)
-      (setq port (number-to-string port)))
-    (when (stringp stream-type)
-      (setq stream-type (intern stream-type)))
-    (setq stream-type-spec (elmo-alias-stream-type-spec
-			    stream-type elmo-nntp-stream-type-alist))
-    (apply 'concat
-	   prefix
-	   mailbox
-	   (append
-	    (and user (list ":" user))
-	    (and server (list "@" server))
-	    (and port (list ":" port))
-	    (and stream-type-spec (list stream-type-spec))))))
+;; (@* "Maildir Converter")
+(require 'elmo-maildir)
+(eval-and-compile
+  ;; CONFIG allows followings:
+  ;;    - :path
+  (luna-define-class elmo-alias-maildir-converter (elmo-alias-filepath-converter) (config)))
 
-(provide 'elmo-alias)
+(luna-define-method elmo-alias-filepath-converter-prefix ((converter elmo-alias-maildir-converter))
+  (elmo-alias-folder-prefix 'maildir))
+
 
 ;; ================================================================
 ;; (@* "WL Layer")
@@ -347,6 +326,8 @@
 			     'image))
 	    (overlay-put overlay 'before-string
 			 (propertize " " 'display image 'invisible t))))))))
+ 
 
 (provide 'wl-alias-folder)
+(provide 'elmo-alias)
 ;;; wl-alias-folder.el ends here
