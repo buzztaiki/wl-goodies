@@ -55,45 +55,35 @@
 ;; (@* "ELMO Layer")
 ;; ================================================================
 
+(require 'luna)
 (require 'elmo)
 (require 'elmo-msgdb)
+(require 'cl-lib)
+(require 'pcase)
 
 (defvar elmo-alias-folder-alist nil)
 
 (eval-and-compile
   (defun elmo-alias-list-package-methods (lib)
-    (let (list)
-      (mapatoms
-       (lambda (x)
-	 (when (and
-		(get x 'luna-method-cache)
-		(let ((file (symbol-file x)))
-		  (and file
-		       (string= (file-name-sans-extension
-				 (file-name-nondirectory file))
-				lib))))
-	   (push x list))))
-      list)))
+    (cl-loop
+     for x being the symbols
+     if (and (get x 'luna-method-cache)
+	     (let* ((file (symbol-file x))
+		    (base (and file (file-name-sans-extension
+				     (file-name-nondirectory file)))))
+	       (string= base lib)))
+     collect x)))
 
 (eval-when-compile
-  (require 'advice)
   (defmacro elmo-alias-define-delegate-method (name class target-slot)
-    (let* ((args (ad-arglist (symbol-function name)))
-	   (call (if (memq '&rest args) 'apply 'funcall))
-	   (entity-var (gensym "entity-")))
-      `(luna-define-method ,name
-	 ((,entity-var ,class)
-	  ,@(cdr args))
-	 (,call ',name (luna-slot-value ,entity-var ',target-slot)
-		,@(elmo-delete-if (lambda (x) (memq x '(&optional &rest)))
-				  (copy-sequence (cdr args)))))))
-
+    `(luna-define-method ,name ((entity ,class) &rest args)
+       (apply ',name (luna-slot-value entity ',target-slot) args)))
   (defmacro elmo-alias-define-delegate-methods (lib class target-slot)
-    (cons
-     'progn
-     (mapcar (lambda (name)
-	       `(elmo-alias-define-delegate-method ,name ,class ,target-slot))
-	     (elmo-alias-list-package-methods lib)))))
+    `(progn
+       ,@(mapcar (lambda (name)
+                   `(elmo-alias-define-delegate-method ,name ,class ,target-slot))
+                 (elmo-alias-list-package-methods lib)))))
+
 
 (eval-and-compile
   (luna-define-class elmo-alias-folder (elmo-folder)
@@ -103,27 +93,23 @@
 (elmo-alias-define-delegate-methods "elmo" elmo-alias-folder target)
 
 (luna-define-method elmo-folder-initialize
-  ((folder elmo-alias-folder)
-   name)
-  (unless (string-match "^\\([^:]+\\)\\(:\\(.+\\)\\)*" name)
-    (error "Folder syntax error `%s'" (elmo-folder-name-internal folder)))
-  (let* ((alias-name (match-string 1 name))
-	 (mailbox (match-string 3 name))
-	 (spec (cdr (assoc alias-name elmo-alias-folder-alist)))
-	 converter target)
-    (unless spec
-      (error "Cannot fond alias `%s' in `elmo-alias-folder-alist'" alias-name))
-    (setq converter (luna-make-entity
-		     (intern (format "elmo-alias-%s-converter" (car spec)))
-		     :config (cdr spec)))
-    (setq target (elmo-get-folder
-		  (elmo-alias-convert-to-target converter mailbox)))
-    (elmo-alias-folder-set-alias-name-internal folder alias-name)
-    (elmo-alias-folder-set-converter-internal folder converter)
-    (elmo-alias-folder-set-target-internal folder target)
-    (elmo-alias-connect-signals
-     folder (elmo-alias-folder-target-internal folder))
-    folder))
+  ((folder elmo-alias-folder) name)
+  (pcase-let* ((`(,alias-name . ,rest) (split-string name ":"))
+	       (mailbox (mapconcat 'identity rest ":"))
+	       (alias-def (cdr (assoc alias-name elmo-alias-folder-alist))))
+    (unless alias-def
+      (error "Alias `%s' not found in `elmo-alias-folder-alist'" alias-name))
+    (pcase-let* ((`(,type . ,config) alias-def)
+		 (converter (luna-make-entity
+			     (intern (format "elmo-alias-%s-converter" type))
+			     :config config))
+		 (target (elmo-get-folder (elmo-alias-convert-to-target converter mailbox))))
+      (elmo-alias-folder-set-alias-name-internal folder alias-name)
+      (elmo-alias-folder-set-converter-internal folder converter)
+      (elmo-alias-folder-set-target-internal folder target)
+      (elmo-alias-connect-signals folder (elmo-alias-folder-target-internal folder))))
+  folder)
+
 
 (defun elmo-alias-connect-signals (folder target)
   (elmo-connect-signal
@@ -161,14 +147,22 @@
   (let ((target (elmo-alias-folder-target-internal folder)))
     (elmo-folder-have-subfolder-p target)))
 
-(defadvice elmo-folder-append-messages (before elmo-alias activate)
-  "Alias folder support."
-  ;; 0: dst-folder
-  ;; 1: src-folder
-  (when (eq (elmo-folder-type-internal (ad-get-arg 0)) 'alias)
-    (ad-set-arg 0 (elmo-alias-folder-target-internal (ad-get-arg 0))))
-  (when (eq (elmo-folder-type-internal (ad-get-arg 1)) 'alias)
-    (ad-set-arg 1 (elmo-alias-folder-target-internal (ad-get-arg 1)))))
+(defun elmo-folder-append-messages-alias-* (dst-folder src-folder numbers same-number)
+  (elmo-folder-append-messages dst-folder (elmo-alias-folder-target-internal src-folder) numbers same-number))
+
+(defun elmo-folder-append-messages-*-alias (dst-folder src-folder numbers same-number)
+  (elmo-folder-append-messages (elmo-alias-folder-target-internal dst-folder) src-folder numbers same-number))
+
+(defconst elmo-alias-append-messages-dispatch-table
+  '(((alias . nil) . elmo-folder-append-messages-alias-*)
+    ((nil . alias) . elmo-folder-append-messages-*-alias)))
+
+(defun elmo-alias-folder-append-messages (fn &rest args)
+  (let ((elmo-append-messages-dispatch-table (append elmo-alias-append-messages-dispatch-table
+                                                     elmo-append-messages-dispatch-table)))
+    (apply fn args)))
+(advice-add 'elmo-folder-append-messages :around 'elmo-alias-folder-append-messages)
+
 
 ;; ----------------------------------------------------------------
 ;; (@* "Icon Support")
@@ -310,23 +304,21 @@
 ;; (@* "WL Layer")
 ;; ================================================================
 
-(defadvice wl-highlight-folder-current-line (after wl-alias-folder activate)
-  "Support alias folder icon."
+(defun wl-alias-folder-highlight-folder-current-line (&rest args)
   (unless (wl-folder-buffer-group-p)
-    (let ((overlay (find-if (lambda (x) (overlay-get x 'wl-e21-icon))
-			    (overlays-in (line-beginning-position)
-					 (line-end-position))))
+    (let ((overlay (cl-find-if (lambda (x) (overlay-get x 'wl-e21-icon))
+                               (overlays-in (line-beginning-position)
+                                            (line-end-position))))
 	  (entity (wl-folder-get-entity-from-buffer)))
       (when (and overlay entity)
 	(let* ((elmo-folder (elmo-make-folder entity))
 	       (icon-type (elmo-folder-icon-type elmo-folder))
-	       image)
-	  (when icon-type
-	    (setq image (get (intern (format "wl-folder-%s-image" icon-type))
-			     'image))
+	       (image (and icon-type (get (intern (format "wl-folder-%s-image" icon-type)) 'image))))
+          (when image
 	    (overlay-put overlay 'before-string
 			 (propertize " " 'display image 'invisible t))))))))
- 
+(advice-add 'wl-highlight-folder-current-line :after 'wl-alias-folder-highlight-folder-current-line)
+
 
 (provide 'wl-alias-folder)
 (provide 'elmo-alias)
